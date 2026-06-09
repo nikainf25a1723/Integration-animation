@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Integration Calculator & Grapher</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.8.0/math.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f7fb;
+            color: #333;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: #ffffff;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 25px;
+        }
+        @media (max-width: 768px) {
+            .container { grid-template-columns: 1fr; }
+        }
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        h2 {
+            margin-top: 0;
+            color: #1a1a1a;
+            font-size: 22px;
+            border-bottom: 2px solid #edf2f7;
+            padding-bottom: 10px;
+        }
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        label {
+            font-weight: 600;
+            font-size: 14px;
+            color: #4a5568;
+        }
+        input {
+            padding: 10px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            font-size: 16px;
+            transition: border-color 0.2s;
+        }
+        input:focus {
+            outline: none;
+            border-color: #3b82f6;
+        }
+        button {
+            padding: 12px;
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #2563eb;
+        }
+        .result-box {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #eff6ff;
+            border-left: 4px solid #3b82f6;
+            border-radius: 4px;
+        }
+        .result-title {
+            font-weight: bold;
+            color: #1e40af;
+            font-size: 15px;
+            margin-bottom: 5px;
+        }
+        .result-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #1d4ed8;
+        }
+        .graph-container {
+            position: relative;
+            min-height: 400px;
+            background: #fff;
+            border: 1px solid #edf2f7;
+            border-radius: 8px;
+            padding: 10px;
+        }
+        .error {
+            color: #dc2626;
+            font-size: 14px;
+            margin-top: 5px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="controls">
+        <h2>Integration Controls</h2>
+        
+        <div class="input-group">
+            <label for="functionInput">Function f(x)</label>
+            <input type="text" id="functionInput" value="x^2 - 2x + 1" placeholder="e.g., sin(x), x^3, 2*x">
+            <div id="errorMsg" class="error">Invalid math expression.</div>
+        </div>
+
+        <div class="input-group">
+            <label for="boundA">Lower Bound (a)</label>
+            <input type="number" id="boundA" value="0" step="any">
+        </div>
+
+        <div class="input-group">
+            <label for="boundB">Upper Bound (b)</label>
+            <input type="number" id="boundB" value="3" step="any">
+        </div>
+
+        <div class="input-group">
+            <label for="intervals">Intervals (n) for Riemann Sum</label>
+            <input type="number" id="intervals" value="100" min="10" max="10000">
+        </div>
+
+        <button onclick="calculateAndGraph()">Calculate & Plot</button>
+
+        <div class="result-box">
+            <div class="result-title">Definite Integral Estimate:</div>
+            <div class="result-value" id="resultDisplay">0.00</div>
+        </div>
+    </div>
+
+    <div class="graph-container">
+        <canvas id="myChart"></canvas>
+    </div>
+</div>
+
+<script>
+    let myChart = null;
+
+    // Primary Execution Function
+    function calculateAndGraph() {
+        const formula = document.getElementById('functionInput').value;
+        const a = parseFloat(document.getElementById('boundA').value);
+        const b = parseFloat(document.getElementById('boundB').value);
+        const n = parseInt(document.getElementById('intervals').value);
+        const errorMsg = document.getElementById('errorMsg');
+
+        errorMsg.style.display = 'none';
+
+        try {
+            // Compile user input function using math.js
+            const expr = math.compile(formula);
+
+            // 1. Calculate Riemann Sum (Definite Integral Approximation)
+            const dx = (b - a) / n;
+            let areaSum = 0;
+            
+            // Midpoint Riemann sum calculation for greater accuracy
+            for (let i = 0; i < n; i++) {
+                const xMid = a + dx * (i + 0.5);
+                areaSum += expr.evaluate({ x: xMid }) * dx;
+            }
+
+            // Display numerical integration result
+            document.getElementById('resultDisplay').innerText = areaSum.toFixed(5);
+
+            // 2. Generate Data Points for Plotting the overall function line
+            // We expand the window view slightly outward from [a, b] for context
+            const padding = Math.abs(b - a) * 0.4 || 2;
+            const viewMin = a - padding;
+            const viewMax = b + padding;
+            const plotResolution = 200; 
+
+            const functionPoints = [];
+            const step = (viewMax - viewMin) / plotResolution;
+
+            for (let i = 0; i <= plotResolution; i++) {
+                const currentX = viewMin + (step * i);
+                try {
+                    const currentY = expr.evaluate({ x: currentX });
+                    if (typeof currentY === 'number' && !isNaN(currentY)) {
+                        functionPoints.push({ x: currentX, y: currentY });
+                    }
+                } catch(e) { /* Skip undefined evaluation points */ }
+            }
+
+            // 3. Generate Data Points to fill the shaded integration region [a, b]
+            const shadedPoints = [];
+            const integrationResolution = 150;
+            const intStep = (b - a) / integrationResolution;
+
+            // Start bounding fill at the lower constraint baseline
+            shadedPoints.push({ x: a, y: 0 }); 
+            for (let i = 0; i <= integrationResolution; i++) {
+                const currentX = a + (intStep * i);
+                const currentY = expr.evaluate({ x: currentX });
+                shadedPoints.push({ x: currentX, y: currentY });
+            }
+            shadedPoints.push({ x: b, y: 0 }); // Close bounding fill at upper baseline
+
+            // 4. Update or Instantiate Chart.js layout
+            renderChart(functionPoints, shadedPoints, a, b);
+
+        } catch (error) {
+            console.error(error);
+            errorMsg.style.display = 'block';
+        }
+    }
+
+    function renderChart(lineData, fillData, boundA, boundB) {
+        const ctx = document.getElementById('myChart').getContext('2d');
+
+        if (myChart !== null) {
+            myChart.destroy(); // Destroys previous instance to avoid canvas overlay bugs
+        }
+
+        myChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                datasets: [
+                    {
+                        label: 'f(x)',
+                        data: lineData,
+                        borderColor: '#2563eb',
+                        borderWidth: 3,
+                        pointRadius: 0,
+                        fill: false,
+                        tension: 0.1,
+                        order: 1
+                    },
+                    {
+                        label: `Area (${boundA} to ${boundB})`,
+                        data: fillData,
+                        backgroundColor: 'rgba(59, 130, 246, 0.35)', // Translucent Desmos-like fill
+                        borderColor: 'transparent',
+                        pointRadius: 0,
+                        fill: true, // Shades the region down to y=0 baseline dynamically
+                        tension: 0.1,
+                        order: 2
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        type: 'linear',
+                        position: 'bottom',
+                        grid: { color: '#e2e8f0' },
+                        title: { display: true, text: 'X Axis', font: { weight: 'bold' } }
+                    },
+                    y: {
+                        type: 'linear',
+                        grid: { color: '#e2e8f0' },
+                        title: { display: true, text: 'Y Axis', font: { weight: 'bold' } }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        labels: { boxWidth: 20 }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return `x: ${context.parsed.x.toFixed(3)}, y: ${context.parsed.y.toFixed(3)}`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Trigger calculation automatically on initial window launch
+    window.onload = calculateAndGraph;
+</script>
+
+</body>
+</html>
